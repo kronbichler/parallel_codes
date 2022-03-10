@@ -255,7 +255,7 @@ void run_test(const long long N_x_given,
       {
         const auto t1 = std::chrono::steady_clock::now();
         for (unsigned long long rep = 0; rep < n_repeat; ++rep)
-          sparse_matrix.apply(src, dst);
+          sparse_matrix.apply(src_device, dst_device);
 
         // make sure to finish all GPU kernels before measuring again
         cudaDeviceSynchronize();
