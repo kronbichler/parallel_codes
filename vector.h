@@ -268,6 +268,7 @@ public:
         const unsigned int n_blocks =
           (local_size + block_size - 1) / block_size;
         set_entries<<<n_blocks, block_size>>>(local_size, scalar, data);
+        AssertCuda(cudaPeekAtLastError());
 #endif
       }
     else
@@ -297,6 +298,7 @@ public:
           (local_size + block_size - 1) / block_size;
         vector_update<<<n_blocks, block_size>>>(
           local_size, my_scalar, other_scalar, other.data, data);
+        AssertCuda(cudaPeekAtLastError());
 #endif
       }
     else
@@ -342,6 +344,7 @@ public:
                                                              data,
                                                              other.data,
                                                              result_device);
+        AssertCuda(cudaPeekAtLastError());
         cudaMemcpy(&local_sum,
                    result_device,
                    sizeof(Number),
