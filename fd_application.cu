@@ -200,8 +200,15 @@ void run_test(const long long N_x_given,
 
   if (do_sparse)
     {
-      const SparseMatrix<Number> sparse_matrix = difference_stencil.fill_sparse_matrix();
-      sparse_matrix.apply(src, dst);
+      const SparseMatrix<Number> sparse_matrix_host = difference_stencil.fill_sparse_matrix();
+      // create matrix on device
+      SparseMatrix<Number> sparse_matrix = sparse_matrix_host.copy_to_device();
+      Vector<Number> src_device = src.copy_to_device();
+      Vector<Number> dst_device = dst.copy_to_device();
+
+      sparse_matrix.apply(src_device, dst_device);
+
+      dst = dst_device.copy_to_host();
 
       double error = 0;
 #pragma omp parallel for
@@ -234,6 +241,9 @@ void run_test(const long long N_x_given,
         for (unsigned long long rep=0; rep<n_repeat; ++rep)
           sparse_matrix.apply(src, dst);
 
+        // make sure to finish all GPU kernels before measuring again
+        cudaDeviceSynchronize();
+
         const double time =
           std::chrono::duration_cast<std::chrono::duration<double>>(
             std::chrono::steady_clock::now() - t1).count();
@@ -257,11 +267,12 @@ void run_test(const long long N_x_given,
             result(0) = 1.;
             result(1) = 0.8;
           }
+        Vector<Number> result_device = result.copy_to_device();
 
         const auto t1 = std::chrono::steady_clock::now();
         const auto info =
           solve_with_conjugate_gradient(500, 1e-12, sparse_matrix,
-                                        dst, result);
+                                        dst_device, result_device);
 
         const double time =
           std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -273,7 +284,12 @@ void run_test(const long long N_x_given,
                     << time << " seconds or "
                     << std::setw(8) << 1e-6 * src.size() * info.first / time
                     << " MUPD/s/it" << std::endl;
+        result = result_device.copy_to_host();
         result.add(-1., src);
+        const double l2_norm = result.l2_norm();
+
+        if (my_mpi_rank == 0)
+          std::cout << "Error conjugate gradient solve: " << l2_norm << std::endl;
       }
     }
 }
