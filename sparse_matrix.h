@@ -334,7 +334,7 @@ public:
 #endif
   }
 
-  SparseMatrix copy_to_device()
+  SparseMatrix copy_to_device() const
   {
     if (memory_space == MemorySpace::CUDA)
       {
