@@ -10,7 +10,7 @@
 #include <utility>
 
 #ifdef HAVE_MPI
-#include <mpi.h>
+#  include <mpi.h>
 #endif
 
 #include <omp.h>
@@ -23,18 +23,18 @@
 #ifdef HAVE_CUDA
 
 template <typename Number>
-__global__ void compute_spmv(const std::size_t N,
-                             const std::size_t *row_starts,
+__global__ void compute_spmv(const std::size_t   N,
+                             const std::size_t * row_starts,
                              const unsigned int *column_indices,
-                             const Number *values,
-                             const Number *x,
-                             Number *y)
+                             const Number *      values,
+                             const Number *      x,
+                             Number *            y)
 {
   const int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < N)
     {
       Number sum = 0;
-      for (std::size_t col = row_starts[idx]; col < row_starts[idx+1]; ++col)
+      for (std::size_t col = row_starts[idx]; col < row_starts[idx + 1]; ++col)
         sum += values[col] * x[column_indices[col]];
       y[idx] = sum;
     }
@@ -54,9 +54,9 @@ public:
 
   SparseMatrix(const std::vector<unsigned int> &row_lengths,
                const MemorySpace                memory_space,
-               const MPI_Comm                   communicator)
-    : communicator(communicator),
-      memory_space(memory_space)
+               const MPI_Comm                   communicator) :
+    communicator(communicator),
+    memory_space(memory_space)
   {
     n_rows     = row_lengths.size();
     row_starts = new std::size_t[n_rows + 1];
@@ -73,7 +73,7 @@ public:
     if (memory_space == MemorySpace::CUDA)
       {
         std::size_t *host_row_starts = row_starts;
-        row_starts = 0;
+        row_starts                   = 0;
         AssertCuda(cudaMalloc(&row_starts, (n_rows + 1) * sizeof(std::size_t)));
         AssertCuda(cudaMemcpy(row_starts,
                               host_row_starts,
@@ -81,13 +81,12 @@ public:
                               cudaMemcpyHostToDevice));
         delete[] host_row_starts;
 
-        AssertCuda(cudaMalloc(&column_indices,
-                              n_entries * sizeof(unsigned int)));
+        AssertCuda(
+          cudaMalloc(&column_indices, n_entries * sizeof(unsigned int)));
         AssertCuda(cudaMalloc(&values, n_entries * sizeof(Number)));
 
 #ifdef HAVE_CUDA
-        const unsigned int n_blocks =
-          (n_entries + block_size - 1) / block_size;
+        const unsigned int n_blocks = (n_entries + block_size - 1) / block_size;
         set_entries<<<n_blocks, block_size>>>(n_entries, 0U, column_indices);
         set_entries<<<n_blocks, block_size>>>(n_entries, Number(0), values);
         AssertCuda(cudaPeekAtLastError());
@@ -99,11 +98,11 @@ public:
         values         = new Number[n_entries];
 
 #pragma omp parallel for
-        for (std::size_t i=0; i<n_entries; ++i)
+        for (std::size_t i = 0; i < n_entries; ++i)
           column_indices[i] = 0;
 
 #pragma omp parallel for
-        for (std::size_t i=0; i<n_entries; ++i)
+        for (std::size_t i = 0; i < n_entries; ++i)
           values[i] = 0;
       }
 
@@ -128,11 +127,10 @@ public:
       }
   }
 
-  SparseMatrix(const SparseMatrix &other)
-    : communicator(other.communicator),
-      memory_space(other.memory_space),
-      n_rows(other.n_rows),
-      n_global_nonzero_entries(other.n_global_nonzero_entries)
+  SparseMatrix(const SparseMatrix &other) :
+    communicator(other.communicator), memory_space(other.memory_space),
+    n_rows(other.n_rows),
+    n_global_nonzero_entries(other.n_global_nonzero_entries)
   {
     if (memory_space == MemorySpace::CUDA)
       {
@@ -148,8 +146,8 @@ public:
                               other.row_starts + n_rows,
                               sizeof(std::size_t),
                               cudaMemcpyDeviceToHost));
-        AssertCuda(cudaMalloc(&column_indices,
-                              n_entries * sizeof(unsigned int)));
+        AssertCuda(
+          cudaMalloc(&column_indices, n_entries * sizeof(unsigned int)));
         AssertCuda(cudaMemcpy(column_indices,
                               other.column_indices,
                               n_entries * sizeof(unsigned int),
@@ -163,9 +161,7 @@ public:
 #endif
       }
     else
-      {
-
-      }
+      {}
   }
 
   // do not allow copying matrix
@@ -228,8 +224,8 @@ public:
   // owner of particular columns (sometimes called consensus algorithm).
   void set_send_and_receive_information(
     const std::vector<std::pair<unsigned int, std::vector<unsigned int>>>
-                                                       & send_indices,
-    const std::vector<std::pair<unsigned int, unsigned int>> & receive_indices)
+      &                                                       send_indices,
+    const std::vector<std::pair<unsigned int, unsigned int>> &receive_indices)
   {
     this->send_indices    = send_indices;
     std::size_t send_size = 0;
@@ -298,14 +294,9 @@ public:
     if (memory_space == MemorySpace::CUDA)
       {
 #ifdef HAVE_CUDA
-        const unsigned int n_blocks =
-          (n_rows + block_size - 1) / block_size;
-        compute_spmv<<<n_blocks, block_size>>>(n_rows,
-                                               row_starts,
-                                               column_indices,
-                                               values,
-                                               src.begin(),
-                                               dst.begin());
+        const unsigned int n_blocks = (n_rows + block_size - 1) / block_size;
+        compute_spmv<<<n_blocks, block_size>>>(
+          n_rows, row_starts, column_indices, values, src.begin(), dst.begin());
         AssertCuda(cudaPeekAtLastError());
 #endif
       }
@@ -352,9 +343,7 @@ public:
         for (unsigned int i = 0; i < n_rows; ++i)
           row_lengths[i] = row_starts[i + 1] - row_starts[i];
 
-        SparseMatrix other(row_lengths,
-                           MemorySpace::CUDA,
-                           communicator);
+        SparseMatrix other(row_lengths, MemorySpace::CUDA, communicator);
 #ifdef HAVE_CUDA
         AssertCuda(cudaMemcpy(other.column_indices,
                               column_indices,

@@ -7,10 +7,10 @@
 #ifndef vector_h
 #define vector_h
 
-#include <utility>
-#include <memory>
-
 #include <omp.h>
+
+#include <memory>
+#include <utility>
 
 ////////////////// implementation of some utility functions //////////////////
 
@@ -91,21 +91,20 @@ Number mpi_sum(const Number local_sum, MPI_Comm communicator)
 
 #ifdef HAVE_CUDA
 
-#define AssertCuda(error_code)                                          \
-  if (error_code != cudaSuccess)                                        \
-    {                                                                   \
-      std::cout << "The cuda call in " << __FILE__ << " on line "       \
-                << __LINE__ << " resulted in the error '"               \
-                << cudaGetErrorString(error_code) << "'" << std::endl;  \
-      std::abort();                                                     \
-    }
+#  define AssertCuda(error_code)                                         \
+    if (error_code != cudaSuccess)                                       \
+      {                                                                  \
+        std::cout << "The cuda call in " << __FILE__ << " on line "      \
+                  << __LINE__ << " resulted in the error '"              \
+                  << cudaGetErrorString(error_code) << "'" << std::endl; \
+        std::abort();                                                    \
+      }
 
 
 
 template <typename Number>
-__global__ void set_entries(const std::size_t N,
-                            Number scalar,
-                            Number *destination)
+__global__ void
+set_entries(const std::size_t N, Number scalar, Number *destination)
 {
   const int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < N)
@@ -115,10 +114,10 @@ __global__ void set_entries(const std::size_t N,
 
 template <typename Number>
 __global__ void vector_update(const std::size_t N,
-                              Number scalar1,
-                              Number scalar2,
-                              const Number *source,
-                              Number *destination)
+                              Number            scalar1,
+                              Number            scalar2,
+                              const Number *    source,
+                              Number *          destination)
 {
   const int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < N)
@@ -155,7 +154,7 @@ do_dot(unsigned int n, Number *vector1, Number *vector2, Number *result)
 }
 
 #else
-#define AssertCuda(error_code)
+#  define AssertCuda(error_code)
 #endif
 
 
@@ -169,12 +168,9 @@ public:
   static const int block_size = 256;
 
   // Create a serial vector of the given size
-  Vector(const std::size_t global_size, const MemorySpace memory_space)
-    : communicator(MPI_COMM_SELF),
-      data(nullptr),
-      global_size(global_size),
-      locally_owned_range_start(0),
-      memory_space(memory_space)
+  Vector(const std::size_t global_size, const MemorySpace memory_space) :
+    communicator(MPI_COMM_SELF), data(nullptr), global_size(global_size),
+    locally_owned_range_start(0), memory_space(memory_space)
   {
     resize(global_size);
   }
@@ -184,22 +180,20 @@ public:
   Vector(const std::size_t                         global_size,
          const std::pair<std::size_t, std::size_t> locally_owned_range,
          const MemorySpace                         memory_space,
-         const MPI_Comm                            communicator)
-    : communicator(communicator),
-      data(nullptr),
-      global_size(global_size),
-      locally_owned_range_start(locally_owned_range.first),
-      memory_space(memory_space)
+         const MPI_Comm                            communicator) :
+    communicator(communicator),
+    data(nullptr), global_size(global_size),
+    locally_owned_range_start(locally_owned_range.first),
+    memory_space(memory_space)
   {
     resize(locally_owned_range.second - locally_owned_range.first);
   }
 
-  Vector(const Vector &other)
-    : communicator(other.communicator),
-      data(nullptr),
-      global_size(other.global_size),
-      locally_owned_range_start(other.locally_owned_range_start),
-      memory_space(other.memory_space)
+  Vector(const Vector &other) :
+    communicator(other.communicator), data(nullptr),
+    global_size(other.global_size),
+    locally_owned_range_start(other.locally_owned_range_start),
+    memory_space(other.memory_space)
   {
     resize_fast(other.local_size);
     if (memory_space == MemorySpace::CUDA)
@@ -301,11 +295,8 @@ public:
 #ifdef HAVE_CUDA
         const unsigned int n_blocks =
           (local_size + block_size - 1) / block_size;
-        vector_update<<<n_blocks, block_size>>>(local_size,
-                                                my_scalar,
-                                                other_scalar,
-                                                other.data,
-                                                data);
+        vector_update<<<n_blocks, block_size>>>(
+          local_size, my_scalar, other_scalar, other.data, data);
 #endif
       }
     else
@@ -351,7 +342,9 @@ public:
                                                              data,
                                                              other.data,
                                                              result_device);
-        cudaMemcpy(&local_sum, result_device, sizeof(Number),
+        cudaMemcpy(&local_sum,
+                   result_device,
+                   sizeof(Number),
                    cudaMemcpyDeviceToHost);
 #endif
       }
@@ -365,12 +358,12 @@ public:
     return mpi_sum(local_sum, communicator);
   }
 
-  Number* begin()
+  Number *begin()
   {
     return data;
   }
 
-  const Number* begin() const
+  const Number *begin() const
   {
     return data;
   }
@@ -389,6 +382,10 @@ public:
                                               local_size),
                              MemorySpace::CUDA,
                              communicator);
+        AssertCuda(cudaMemcpy(other.data,
+                              data,
+                              local_size * sizeof(Number),
+                              cudaMemcpyHostToDevice));
         return other;
       }
   }
@@ -406,7 +403,7 @@ public:
         AssertCuda(cudaMemcpy(other.data,
                               data,
                               local_size * sizeof(Number),
-                              cudaMemcpyHostToDevice));
+                              cudaMemcpyDeviceToHost));
         return other;
       }
     else
@@ -459,7 +456,7 @@ private:
     else
       {
         delete[] data;
-        data             = new Number[local_size];
+        data = new Number[local_size];
       }
     this->local_size = local_size;
   }
